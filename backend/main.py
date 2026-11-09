@@ -10,12 +10,12 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS configuration: allow the React frontend to access FastAPI
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "https://ai-health-assistant-cyan.vercel.app",
     ],
     allow_credentials=False,
     allow_methods=["*"],
@@ -40,7 +40,6 @@ def health_check():
     }
 
 
-# Register symptom analysis routes
 app.include_router(
     symptoms_router,
     prefix="/api/v1"
