@@ -2,6 +2,8 @@
 import { useState } from "react";
 import "./App.css";
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 const suggestedSymptoms = [
   "itching",
   "skin_rash",
@@ -18,44 +20,55 @@ const suggestedSymptoms = [
 ];
 
 function App() {
-  const [symptoms, setSymptoms] = useState("");
+  const [symptoms, setSymptoms] = useState([]);
+  const [customSymptom, setCustomSymptom] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const addSymptom = (symptom) => {
-    const current = symptoms
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
+  const toggleSymptom = (symptom) => {
+    setSymptoms((previous) =>
+      previous.includes(symptom)
+        ? previous.filter((item) => item !== symptom)
+        : [...previous, symptom]
+    );
 
-    if (!current.includes(symptom)) {
-      setSymptoms([...current, symptom].join(", "));
-      setError("");
+    setResult(null);
+    setError("");
+  };
+
+  const addCustomSymptom = () => {
+    const cleaned = customSymptom.trim().toLowerCase();
+
+    if (!cleaned) return;
+
+    if (!symptoms.includes(cleaned)) {
+      setSymptoms((previous) => [...previous, cleaned]);
     }
-  };
 
-  const clearSymptoms = () => {
-    setSymptoms("");
-    setError("");
-    setResult(null);
-  };
-
-  const resetAnalysis = () => {
+    setCustomSymptom("");
     setResult(null);
     setError("");
   };
 
-  const analyzeSymptoms = async (e) => {
-    e.preventDefault();
+  const removeSymptom = (symptom) => {
+    setSymptoms((previous) =>
+      previous.filter((item) => item !== symptom)
+    );
 
-    const symptomList = symptoms
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
+    setResult(null);
+  };
 
-    if (symptomList.length === 0) {
-      setError("Please enter at least one symptom.");
+  const analyzeSymptoms = async () => {
+    if (symptoms.length === 0) {
+      setError("Please select at least one symptom.");
+      return;
+    }
+
+    if (!API_URL) {
+      setError(
+        "API URL is missing. Please configure VITE_API_URL in Vercel."
+      );
       return;
     }
 
@@ -65,14 +78,14 @@ function App() {
 
     try {
       const response = await fetch(
-        "http://127.0.0.1:8000/api/v1/symptoms/analyze",
+        `${API_URL.replace(/\/$/, "")}/api/v1/symptoms/analyze`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            symptoms: symptomList,
+            symptoms: symptoms,
           }),
         }
       );
@@ -87,299 +100,245 @@ function App() {
 
       setResult(data);
     } catch (err) {
+      console.error("API Error:", err);
+
       setError(
-        err.message || "Could not connect to the backend."
+        err.message === "Failed to fetch"
+          ? "Unable to connect to the backend. Please check your API URL and backend availability."
+          : err.message
       );
     } finally {
       setLoading(false);
     }
   };
 
-  const confidence = result
-    ? Math.max(
-        0,
-        Math.min(100, Number(result.confidence) || 0)
-      )
-    : 0;
-
-  const assistantResponse =
-    result?.health_assistant_response;
+  const resetForm = () => {
+    setSymptoms([]);
+    setCustomSymptom("");
+    setResult(null);
+    setError("");
+  };
 
   return (
-    <div className="app">
-      <header className="header">
-        <div className="header-content">
-          <div className="brand">
-            <div className="brand-icon">✚</div>
-
-            <div>
-              <h1>AI Health Assistant</h1>
-              <p>Intelligent Health Information Platform</p>
-            </div>
-          </div>
-
-          <div className="system-status">
-            <span className="status-dot"></span>
-            Educational Platform
-          </div>
-        </div>
+    <div className="app-container">
+      <header className="app-header">
+        <h1>AI Health Assistant</h1>
+        <p>
+          AI-powered educational symptom analysis platform
+        </p>
       </header>
 
-      <main className="container">
-        <section className="welcome">
-          <div className="welcome-label">
-            AI-POWERED HEALTH INFORMATION
-          </div>
-
-          <h2>Understand Your Symptoms</h2>
+      <main className="dashboard">
+        <section className="symptom-section">
+          <h2>Symptom Checker</h2>
 
           <p>
-            Explore an experimental machine-learning prediction
-            and receive general educational health guidance.
+            Select the symptoms you are experiencing.
           </p>
-        </section>
 
-        <section className="dashboard-info">
-          <div className="info-card">
-            <span className="info-icon">🤖</span>
-            <div>
-              <h3>AI Analysis</h3>
-              <p>Machine learning</p>
-            </div>
+          <div className="symptom-grid">
+            {suggestedSymptoms.map((symptom) => (
+              <button
+                key={symptom}
+                type="button"
+                className={
+                  symptoms.includes(symptom)
+                    ? "symptom-button selected"
+                    : "symptom-button"
+                }
+                onClick={() => toggleSymptom(symptom)}
+              >
+                {symptom.replaceAll("_", " ")}
+              </button>
+            ))}
           </div>
 
-          <div className="info-card">
-            <span className="info-icon">📋</span>
-            <div>
-              <h3>Symptom Input</h3>
-              <p>Easy reporting</p>
-            </div>
-          </div>
-
-          <div className="info-card">
-            <span className="info-icon">💡</span>
-            <div>
-              <h3>Health Guidance</h3>
-              <p>General information</p>
-            </div>
-          </div>
-        </section>
-
-        <section className="card">
-          <div className="section-heading">
-            <div>
-              <h2>Symptom Analysis</h2>
-              <p>Enter the symptoms you are experiencing.</p>
-            </div>
-
-            <span className="section-icon">✚</span>
-          </div>
-
-          <form onSubmit={analyzeSymptoms}>
-            <label htmlFor="symptoms">
-              Enter your symptoms
-            </label>
-
-            <textarea
-              id="symptoms"
-              value={symptoms}
-              onChange={(e) => setSymptoms(e.target.value)}
-              placeholder="Example: itching, skin_rash, headache"
-              rows="4"
-              disabled={loading}
+          <div className="custom-symptom">
+            <input
+              type="text"
+              value={customSymptom}
+              placeholder="Enter another symptom"
+              onChange={(e) =>
+                setCustomSymptom(e.target.value)
+              }
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  addCustomSymptom();
+                }
+              }}
             />
 
-            <p className="suggestion-heading">
-              Common dataset symptoms (click to add):
-            </p>
+            <button
+              type="button"
+              onClick={addCustomSymptom}
+            >
+              Add
+            </button>
+          </div>
 
-            <div className="symptom-list">
-              {suggestedSymptoms.map((symptom) => (
-                <button
-                  type="button"
-                  className="symptom-chip"
-                  key={symptom}
-                  onClick={() => addSymptom(symptom)}
-                  disabled={loading}
-                >
-                  + {symptom.replaceAll("_", " ")}
-                </button>
-              ))}
-            </div>
+          {symptoms.length > 0 && (
+            <div className="selected-symptoms">
+              <h3>Selected Symptoms</h3>
 
-            <div className="action-buttons">
-              <button type="submit" disabled={loading}>
-                {loading ? (
-                  <span className="loading-content">
-                    <span className="spinner"></span>
-                    Analyzing...
-                  </span>
-                ) : (
-                  "Analyze Symptoms →"
-                )}
-              </button>
-
-              <button
-                type="button"
-                className="clear-button"
-                onClick={clearSymptoms}
-                disabled={loading}
-              >
-                Clear Symptoms
-              </button>
-            </div>
-          </form>
-
-          {error && <p className="error">{error}</p>}
-        </section>
-
-        {result && (
-          <section className="card result result-animated">
-            <h2>Analysis Result</h2>
-
-            <h3>Symptoms Submitted</h3>
-
-            <div className="symptom-list">
-              {result.received_symptoms.map(
-                (symptom, index) => (
+              <div className="selected-list">
+                {symptoms.map((symptom) => (
                   <span
-                    className="result-symptom"
-                    key={index}
+                    className="selected-tag"
+                    key={symptom}
                   >
                     {symptom.replaceAll("_", " ")}
-                  </span>
-                )
-              )}
-            </div>
 
-            <h3>Recognized Symptoms</h3>
-
-            {result.recognized_symptoms?.length > 0 ? (
-              <div className="symptom-list">
-                {result.recognized_symptoms.map(
-                  (symptom, index) => (
-                    <span
-                      className="result-symptom"
-                      key={index}
+                    <button
+                      type="button"
+                      onClick={() => removeSymptom(symptom)}
+                      aria-label={`Remove ${symptom}`}
                     >
-                      ✓ {symptom.replaceAll("_", " ")}
-                    </span>
-                  )
-                )}
+                      ×
+                    </button>
+                  </span>
+                ))}
               </div>
-            ) : (
-              <p>No recognized symptoms.</p>
-            )}
-
-            {result.unrecognized_symptoms?.length > 0 && (
-              <>
-                <h3>Unrecognized Symptoms</h3>
-
-                <div className="symptom-list">
-                  {result.unrecognized_symptoms.map(
-                    (symptom, index) => (
-                      <span
-                        className="result-symptom"
-                        key={index}
-                      >
-                        {symptom}
-                      </span>
-                    )
-                  )}
-                </div>
-
-                <p className="confidence-note">
-                  These symptoms were not found in the
-                  training dataset and were not used for
-                  the experimental prediction.
-                </p>
-              </>
-            )}
-
-            <h3>Experimental Prediction</h3>
-
-            <p className="prediction-name">
-              {result.predicted_disease}
-            </p>
-
-            <h3>Model Prediction Confidence</h3>
-
-            <div className="confidence-details">
-              <span>Model confidence score</span>
-              <strong>{confidence.toFixed(2)}%</strong>
             </div>
+          )}
 
-            <div
-              className="confidence-bar"
-              role="progressbar"
-              aria-valuenow={confidence}
-              aria-valuemin="0"
-              aria-valuemax="100"
-              aria-label="Model prediction confidence"
+          <div className="action-buttons">
+            <button
+              type="button"
+              className="analyze-button"
+              onClick={analyzeSymptoms}
+              disabled={loading}
             >
-              <div
-                className="confidence-fill"
-                style={{
-                  width: `${confidence}%`,
-                }}
-              />
-            </div>
-
-            <p className="confidence-note">
-              This score reflects the model's confidence
-              in its selected category. It is not the
-              probability that you have the condition and
-              does not indicate medical certainty.
-            </p>
-
-            {assistantResponse && (
-              <>
-                <h3>Explanation</h3>
-
-                <p>{assistantResponse.explanation}</p>
-
-                <h3>General Health Guidance</h3>
-
-                <ul>
-                  {assistantResponse.health_guidance?.map(
-                    (item, index) => (
-                      <li key={index}>{item}</li>
-                    )
-                  )}
-                </ul>
-
-                <h3>Important Information</h3>
-
-                <ul>
-                  {assistantResponse.important_information?.map(
-                    (item, index) => (
-                      <li key={index}>{item}</li>
-                    )
-                  )}
-                </ul>
-
-                <p className="warning">
-                  {assistantResponse.medical_warning ||
-                    result.warning}
-                </p>
-              </>
-            )}
+              {loading
+                ? "Analyzing..."
+                : "Analyze Symptoms"}
+            </button>
 
             <button
               type="button"
               className="reset-button"
-              onClick={resetAnalysis}
+              onClick={resetForm}
+              disabled={loading}
             >
-              Reset Analysis
+              Reset
             </button>
+          </div>
+
+          {loading && (
+            <div className="loading-message">
+              Analyzing your selected symptoms...
+            </div>
+          )}
+
+          {error && (
+            <div className="error-message">
+              {error}
+            </div>
+          )}
+        </section>
+
+        {result && (
+          <section className="result-section result-animated">
+            <h2>Analysis Result</h2>
+
+            <div className="result-card">
+              <h3>Experimental Prediction</h3>
+
+              <p className="predicted-disease">
+                {result.predicted_disease}
+              </p>
+
+              <p>
+                Model confidence score:{" "}
+                <strong>
+                  {result.confidence}%
+                </strong>
+              </p>
+
+              <div className="confidence-bar">
+                <div
+                  className="confidence-fill"
+                  style={{
+                    width: `${Math.min(
+                      Math.max(Number(result.confidence) || 0, 0),
+                      100
+                    )}%`,
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="result-card">
+              <h3>Recognized Symptoms</h3>
+
+              <p>
+                {result.recognized_symptoms?.join(", ") ||
+                  "None"}
+              </p>
+            </div>
+
+            {result.unrecognized_symptoms?.length > 0 && (
+              <div className="result-card">
+                <h3>Unrecognized Symptoms</h3>
+
+                <p>
+                  {result.unrecognized_symptoms.join(", ")}
+                </p>
+              </div>
+            )}
+
+            <div className="result-card">
+              <h3>Health Assistant Explanation</h3>
+
+              <p>
+                {result.health_assistant_response?.explanation}
+              </p>
+            </div>
+
+            <div className="result-card">
+              <h3>General Health Guidance</h3>
+
+              <ul>
+                {result.health_assistant_response?.health_guidance?.map(
+                  (item, index) => (
+                    <li key={index}>{item}</li>
+                  )
+                )}
+              </ul>
+            </div>
+
+            <div className="result-card">
+              <h3>Important Information</h3>
+
+              <ul>
+                {result.health_assistant_response?.important_information?.map(
+                  (item, index) => (
+                    <li key={index}>{item}</li>
+                  )
+                )}
+              </ul>
+            </div>
+
+            <div className="medical-warning">
+              <h3>Medical Disclaimer</h3>
+
+              <p>
+                {result.health_assistant_response?.medical_warning ||
+                  result.warning}
+              </p>
+            </div>
           </section>
         )}
 
-        <footer>
-          Educational tool only. Not a medical diagnosis
-          or substitute for professional medical care.
-          Seek urgent medical help for severe or rapidly
-          worsening symptoms.
+        <footer className="app-footer">
+          <p>
+            This application is an educational project,
+            not a medical diagnostic system. Model
+            confidence is not medical certainty.
+          </p>
+          <p>
+            Consult a qualified healthcare professional
+            for medical advice.
+          </p>
         </footer>
       </main>
     </div>
